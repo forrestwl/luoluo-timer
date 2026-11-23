@@ -48,13 +48,14 @@
   .light i:nth-child(2){width:44%;height:18%;left:26%;top:14%;opacity:.62;transform:rotate(-17deg);}
   .light i:nth-child(3){width:26%;height:11%;left:62%;top:31%;opacity:.38;transform:rotate(-17deg);}
 
-  /* ① 时钟：只显示剩余分钟，不显示秒、不跳秒 */
+  /* ① 时钟：MM:SS 逐秒倒计时（林叔 2026-11-23 定，覆盖旧「只显示分钟」口径）
+        等宽数字 + tabular-nums：秒位 59→58→57 时数字不左右抽动 */
   .clock{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
          transition:opacity 1s ease;}
   .clock .num{
     font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
     font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1;
-    font-size:clamp(60px,19vw,84px); line-height:1; font-weight:300; letter-spacing:.01em; color:var(--ink);
+    font-size:clamp(46px,15.5vw,64px); line-height:1; font-weight:300; letter-spacing:.02em; color:var(--ink);
   }
   .clock .unit{font-size:12px;letter-spacing:.3em;color:var(--ink-2);margin-top:7px;padding-left:.3em;}
   .clock svg.arc{display:block;margin-top:14px;overflow:visible;}
@@ -211,13 +212,13 @@
   @keyframes earflick{0%,92%,100%{transform:rotate(0);}95%{transform:rotate(-4deg);}97%{transform:rotate(2deg);}}
 
   @media (max-height:760px){
-    .clock .num{font-size:clamp(52px,17vw,68px);}
+    .clock .num{font-size:clamp(42px,14vw,56px);}
     .clock svg.arc{margin-top:8px;}
     .pet svg{width:min(74%,268px);}
     .btn{padding:11px 30px;font-size:14px;}
   }
   @media (max-height:680px){
-    .clock .num{font-size:50px;}
+    .clock .num{font-size:40px;}
     .pet svg{width:min(66%,230px);}
   }
 </style>
@@ -227,9 +228,9 @@
   <div class="light" aria-hidden="true"><i></i><i></i><i></i></div>
 
   <!-- ① 时钟 -->
-  <section class="clock" aria-label="剩余分钟">
-    <div class="num" id="num">24</div>
-    <div class="unit">分钟</div>
+  <section class="clock" aria-label="剩余时间">
+    <div class="num" id="num">24:00</div>
+    <div class="unit">剩余</div>
     <svg class="arc" width="128" height="20" viewBox="0 0 128 20" aria-hidden="true">
       <path class="track" d="M6 15 Q64 -1 122 15"/>
       <path class="fill" id="arc" d="M6 15 Q64 -1 122 15"/>
@@ -613,8 +614,11 @@
   function paint(remainMs) {
     var ratio = totalMs > 0 ? Math.max(0, Math.min(1, 1 - remainMs / totalMs)) : 0;
     arcEl.style.strokeDashoffset = String(132 * (1 - ratio));       // 弧线随进度走满
-    var mins = Math.max(1, Math.ceil(remainMs / 60000));            // 只显示分钟，不显示秒
-    if (numEl.textContent !== String(mins)) numEl.textContent = String(mins);
+    // MM:SS：用「向上取整到秒」——起始正好 24:00，走完正好 00:00
+    var secs = Math.max(0, Math.ceil(remainMs / 1000));
+    var mm = Math.floor(secs / 60), ss = secs % 60;
+    var txt = (mm < 10 ? '0' + mm : String(mm)) + ':' + (ss < 10 ? '0' + ss : String(ss));
+    if (numEl.textContent !== txt) numEl.textContent = txt;   // 只换文本节点内容
   }
 
   function startFocus() {
@@ -625,7 +629,7 @@
     body.classList.remove('done', 'gift');
     body.classList.add('focus');
     btnStart.hidden = true; btnAgain.hidden = true;
-    document.querySelector('.clock').setAttribute('aria-label', '专注中，剩余分钟');
+    document.querySelector('.clock').setAttribute('aria-label', '专注中，剩余时间 ' + numEl.textContent);
     totalMs = Math.round(FOCUS_MIN * 60000);
     deadline = Date.now() + totalMs;
     paint(totalMs);
