@@ -1,6 +1,6 @@
 /* 极简离线缓存：首屏三个文件缓存到本地，断网也能开。
    不做花活：不预缓存第三方、不做后台同步。 */
-const CACHE = 'cat-timer-v3';
+const CACHE = 'cat-timer-v4';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', (e) => {
