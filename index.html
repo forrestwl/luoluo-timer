@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="猫陪我">
+<meta name="theme-color" content="#F6F1E7">
+<meta name="format-detection" content="telephone=no">
+<title>猫陪我 · 专注</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<style>
+  /* 色板照视觉稿 v1（派工单 3.5 / 产品方案 7.2）：米白·奶橘·陶土红·深棕·鼠尾草绿 = 5 个色相 */
+  :root{
+    --bg:#F6F1E7; --cat:#E8B87A; --cat-dark:#C08F55; --accent:#C67B5C;
+    --ink:#4A4238; --ink-2:#9A9086; --line:#6B5F52; --leaf:#7FA88B; --track:#E4DACA;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;
+    -webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
+  html,body{
+    height:100%; overflow:hidden; overscroll-behavior:none; -webkit-text-size-adjust:100%;
+  }
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"PingFang SC","Hiragino Sans GB","Noto Sans SC",-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(rgba(107,95,82,.045) 1px, transparent 1px),
+      radial-gradient(rgba(255,255,255,.32) 1px, transparent 1px);
+    background-size:3px 3px, 7px 7px;
+    background-position:0 0, 1px 2px;
+  }
+  .stage{
+    position:relative; height:100vh; height:-webkit-fill-available; height:100dvh;
+    max-width:430px; margin:0 auto;
+    display:grid; grid-template-rows:28fr 45fr 10fr 17fr;
+    padding-top:calc(env(safe-area-inset-top) + 22px);
+    padding-bottom:calc(env(safe-area-inset-bottom) + 14px);
+    padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right);
+  }
+  .light{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+  .light i{position:absolute;display:block;background:rgba(255,252,244,.55);
+           filter:blur(28px);border-radius:50%;transition:opacity 1.2s ease;}
+  .light i:nth-child(1){width:80%;height:30%;left:-16%;top:-6%;transform:rotate(-17deg);}
+  .light i:nth-child(2){width:44%;height:18%;left:26%;top:14%;opacity:.62;transform:rotate(-17deg);}
+  .light i:nth-child(3){width:26%;height:11%;left:62%;top:31%;opacity:.38;transform:rotate(-17deg);}
+
+  /* ① 时钟：只显示剩余分钟，不显示秒、不跳秒 */
+  .clock{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+         transition:opacity 1s ease;}
+  .clock .num{
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1;
+    font-size:clamp(60px,19vw,84px); line-height:1; font-weight:300; letter-spacing:.01em; color:var(--ink);
+  }
+  .clock .unit{font-size:12px;letter-spacing:.3em;color:var(--ink-2);margin-top:7px;padding-left:.3em;}
+  .clock svg.arc{display:block;margin-top:14px;overflow:visible;}
+  .arc .track{stroke:var(--track);stroke-width:1.5;fill:none;stroke-linecap:round;}
+  .arc .fill{stroke:var(--accent);stroke-width:1.5;fill:none;stroke-linecap:round;
+             stroke-dasharray:132; stroke-dashoffset:132;}
+  /* 专注结束后时钟整块淡出（用角色说事，不用数字说事） */
+  body.done .clock,body.done .action .btn.start{opacity:0;pointer-events:none;}
+
+  /* ② 猫 */
+  .pet{position:relative;display:flex;align-items:flex-end;justify-content:center;}
+  /* 只给矢量猫定尺寸；不要用 .pet svg 这种宽选择器——它会把小鱼干叠加层
+     也撑到 244px（类选择器打不过 类+元素），鱼就横贯猫身了 */
+  .pet .cat-vector{width:min(80%,306px);height:auto;display:block;overflow:visible;}
+
+  /* ---- 猫位（照片优先 / 矢量兜底）------------------------------------
+     照片还没到，这里先用占位 PNG 把路径跑通。换真照片只替换文件，代码不动：
+       assets/cat-idle.png  → 白天专注（坐姿）
+       assets/cat-sleep.png → 睡前（趴着/闭眼）
+     v1 处理：椭圆柔边遮罩 + 羽化 + 低饱和暖调，贴合米色底。
+     **不做抠图**（不透明背景），等第二版上 rembg 再切。 */
+  .catslot{position:relative;width:min(80%,306px);display:flex;align-items:flex-end;justify-content:center;}
+  .catslot .cat-vector{width:100%;height:auto;}
+  .cat-photo{
+    width:100%;height:auto;display:block;position:relative;z-index:1;
+    /* 2026-11-22：素材改为已定色的插画（洛洛），不再套照片滤镜，否则色值会偏；
+       投影仍保留（按 alpha 投影，只加影不改色值），去"贴纸感" */
+    filter:drop-shadow(0 5px 10px rgba(74,66,56,.10));
+    /* 素材自带米白底（与界面同色），不需要椭圆羽化；羽化反而会把垫子边缘吃掉 */
+    -webkit-mask-image:none;
+    mask-image:none;
+  }
+  /* 姿态层：与 idle 同规格(600×680)，绝对定位叠上去，切姿态用透明度交叉淡入 */
+  .cat-pose{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+            opacity:0;transition:opacity .45s ease;pointer-events:none;}
+  body.has-pose .cat-pose{opacity:1;}
+  body.has-pose .cat-idle{opacity:0;}
+  .cat-idle{transition:opacity .45s ease;}
+  /* 照片加载成功（body.has-photo 由 JS 打上）→ 藏矢量图；失败则保留矢量图 */
+  body.has-photo .catslot .cat-vector{display:none;}
+  body:not(.has-photo) .catslot .cat-photo{display:none;}
+  /* 小鱼干叠加层：位置按猫头右下、嘴的高度估的；真实照片到位后可微调这两个百分比 */
+  .fish-overlay{
+    /* 位置/大小用变量，真照片到位后只改这几个数，不动结构 */
+    /* 坐标来自「素材叠网格 + 视觉读数」，并与像素分析交叉验证（眼 x=250/350、y≈172 一致）：
+       嘴中心 (300, 235) / 图 600×680 → 相对 (0.500, 0.3456)；眼径 40px = 图宽 0.0667
+       鱼宽 13%（≈40px 显示宽，约两个眼球大，一支小鱼干的体量）
+       right = 1 - 0.500 - 0.13/2 = 43.5%
+       top   = 0.3456 - (鱼高/2)/槽高(346) ≈ 31.4%（鱼高 22px） */
+    --fish-w:13%; --fish-right:43.5%; --fish-top:31.4%;
+    position:absolute; z-index:2;   /* 在照片上层：鱼身骑在嘴线上，读作"叼着" */
+    width:var(--fish-w); right:var(--fish-right); top:var(--fish-top); height:auto;
+    opacity:0; transform:translateY(4px); transition:opacity .5s ease, transform .5s ease;
+    pointer-events:none;
+  }
+  body.gift .fish-overlay{opacity:1; transform:translateY(0);}
+  #body{transform-origin:152px 292px;animation:breathe 4s ease-in-out infinite;}
+  @keyframes breathe{0%,100%{transform:scale(1,1);}50%{transform:scale(1.006,1.015);}}
+  #tail{transform-origin:190px 244px;animation:tail 3s ease-in-out infinite;}
+  @keyframes tail{0%,100%{transform:rotate(-2.5deg);}50%{transform:rotate(2.5deg);}}
+  .lid{opacity:0;transition:opacity .04s linear;}
+  #eyes.blink .lid{opacity:1;}
+  #eyes.blink .eye{opacity:.22;}
+  /* 专注中：猫保持不动，只有呼吸 + 眨眼（不弹跳、不位移） */
+  body.focus #tail{animation-duration:3.4s;}
+
+  /* ③ 按钮 10% */
+  .action{display:flex;align-items:center;justify-content:center;position:relative;}
+  .btn{
+    appearance:none;border:0;cursor:pointer;background:var(--accent);color:#FBF6EC;
+    font-size:15px;letter-spacing:.16em;padding:13px 34px;border-radius:999px;
+    font-family:inherit;box-shadow:0 6px 14px rgba(74,66,56,.12);
+    transition:background .3s ease,box-shadow .3s ease,opacity .6s ease; touch-action:manipulation;
+  }
+  .btn:active{background:#B96F52;box-shadow:0 3px 8px rgba(74,66,56,.10);}
+  .btn[hidden]{display:none;}
+
+  .spacer{position:relative;}
+
+  /* ---- 完成态：猫叼一样东西回来 + 淡卡「小鱼干 +1」----
+     不写任何"专注完成 / 时长 / 中断"文案，用角色的动作说事。 */
+  .giftcard{
+    position:absolute; left:50%; top:8%; transform:translate(-50%,8px);
+    background:rgba(255,252,244,.94); color:var(--ink);
+    border-radius:12px; padding:9px 18px; font-size:13.5px; letter-spacing:.08em;
+    box-shadow:0 4px 12px rgba(74,66,56,.10); opacity:0; pointer-events:none;
+    transition:opacity .9s ease, transform .9s ease; white-space:nowrap;
+  }
+  body.gift .giftcard{opacity:1; transform:translate(-50%,0);}
+  /* 猫嘴里的小鱼干：只在完成态出现 */
+  .fish{opacity:0; transition:opacity .5s ease;}
+  body.gift .fish{opacity:1;}
+  /* 完成态尾巴摆快一点（高兴），仍只有一种动作 */
+  body.gift #tail{animation-duration:1.8s;}
+
+  /* ---------------- 睡前 · 一起入睡 ----------------
+     25 分钟：0–5 找位置 / 5–15 闭眼慢呼吸 / 15–25 深睡（耳朵偶尔动）+ 渐暗
+     到点：画面 10 秒沉到接近全黑，同时**释放 wake lock** → 借系统「自动锁定」熄屏 */
+  /* 睡前铺纯色：body 的 3px/7px 网点在深底上会显成"印刷网点"，这里关掉纹理 */
+  body.sleep{--bg:#2C2A2E; background-image:none; background-color:#2C2A2E;}
+  .sleepview{display:none;}
+  body.sleep .sleepview{display:flex;}
+  body.sleep .dayview{display:none;}
+  .sleepview{
+    position:relative; height:100dvh; max-width:430px; margin:0 auto;
+    align-items:center; justify-content:center; flex-direction:column;
+    padding-top:calc(env(safe-area-inset-top) + 22px);
+    padding-bottom:calc(env(safe-area-inset-bottom) + 14px);
+    overflow:hidden;
+  }
+  .sleepview .pose{width:min(78%,300px);height:auto;position:relative;z-index:1;display:none;}
+  .sleepview .cat-sleep{
+    /* 睡姿横构图 900×505：原 300px 在竖屏只有 168px 高 → 小且偏上；改 92%/380 上限 + 下移 */
+    width:min(92%,380px);height:auto;position:relative;z-index:1;display:none;margin-top:6vh;
+    /* 2026-11-22：睡姿素材同样改为已定色插画 + 透明底，不再套照片滤镜与遮罩 */
+    filter:drop-shadow(0 14px 22px rgba(0,0,0,.55));  /* 接触影：垫子不再悬空 */
+    -webkit-mask-image:none; mask-image:none;
+    transition:opacity 2s linear, filter 4s linear;
+  }
+  body.has-photo .sleepview .pose{display:none !important;}
+  body.has-photo .sleepview .cat-sleep{display:block;}
+  /* 照片模式下，四阶段的"越睡越暗"作用在照片上 */
+  body.has-photo.sleep.s1 .cat-sleep{opacity:1;}
+  body.has-photo.sleep.s2 .cat-sleep{opacity:.9;animation:breathe-sleep 6s ease-in-out infinite;transform-origin:50% 60%;}
+  body.has-photo.sleep.s3 .cat-sleep{opacity:.72;}
+  body.has-photo.sleep.s4 .cat-sleep{opacity:.18;filter:saturate(0) brightness(.35);}
+  .sleepview::before{
+    content:""; position:absolute; left:50%; top:58%; width:132%; height:64%;
+    transform:translate(-50%,-50%); pointer-events:none;
+    background:radial-gradient(50% 50% at 50% 50%, rgba(242,197,124,.20) 0%, rgba(242,197,124,0) 70%);
+  }
+  .sleepview .dim{
+    position:absolute; inset:0; pointer-events:none; z-index:2;
+    background:#2C2A2E; opacity:.10; transition:opacity 8s linear;
+  }
+  /* 一行浅灰提示（到点自动退出后连它也一起消失） */
+  .sleepview .hint{
+    position:relative; z-index:3; margin-top:26px;
+    font-size:15px; letter-spacing:.22em; color:var(--ink-2);
+    transition:opacity 2s ease;
+  }
+  body.sleep.s4 .hint{opacity:0;}
+  body.sleep.s1 .pose.s1{display:block;}
+  body.sleep.s2 .pose.s2,body.sleep.s3 .pose.s2,body.sleep.s4 .pose.s2{display:block;}
+  body.sleep.s1 .dim{opacity:.06;}
+  body.sleep.s2 .dim{opacity:.22;}
+  body.sleep.s3 .dim{opacity:.55;}
+  body.sleep.s4 .dim{background:#0B0A0C;opacity:.97;transition:opacity 10s linear, background 6s linear;}
+  body.sleep.s4 .pose{opacity:.06;animation:breathe-sleep 6s ease-in-out infinite;}
+  body.sleep.s2 .pose.s2,body.sleep.s3 .pose.s2{
+    animation:breathe-sleep 6s ease-in-out infinite;transform-origin:150px 150px;}
+  @keyframes breathe-sleep{0%,100%{transform:scale(1,1);}50%{transform:scale(1.004,1.025);}}
+  body.sleep.s3 .ear{animation:earflick 14s ease-in-out infinite;transform-origin:100px 110px;}
+  @keyframes earflick{0%,92%,100%{transform:rotate(0);}95%{transform:rotate(-4deg);}97%{transform:rotate(2deg);}}
+
+  @media (max-height:760px){
+    .clock .num{font-size:clamp(52px,17vw,68px);}
+    .clock svg.arc{margin-top:8px;}
+    .pet svg{width:min(74%,268px);}
+    .btn{padding:11px 30px;font-size:14px;}
+  }
+  @media (max-height:680px){
+    .clock .num{font-size:50px;}
+    .pet svg{width:min(66%,230px);}
+  }
+</style>
+</head>
+<body>
+<main class="stage dayview">
+  <div class="light" aria-hidden="true"><i></i><i></i><i></i></div>
+
+  <!-- ① 时钟 -->
+  <section class="clock" aria-label="剩余分钟">
+    <div class="num" id="num">24</div>
+    <div class="unit">分钟</div>
+    <svg class="arc" width="128" height="20" viewBox="0 0 128 20" aria-hidden="true">
+      <path class="track" d="M6 15 Q64 -1 122 15"/>
+      <path class="fill" id="arc" d="M6 15 Q64 -1 122 15"/>
+    </svg>
+  </section>
+
+  <!-- ② 猫：尾巴 / 身体（头颈肩臀一条连续轮廓）/ 眼睛+眼皮 / 垫子 / 叶子 -->
+  <section class="pet">
+    <div class="giftcard" id="gift" aria-live="polite">小鱼干 +1</div>
+    <!-- 猫位：优先用照片（assets/cat-idle.png），照片缺失时自动退回矢量占位图。
+         换照片只需替换文件，不改代码；两个状态位见 CAT_IDLE / CAT_SLEEP。 -->
+    <div class="catslot">
+      <!-- 同样不写 src：写 PNG 会让首屏先下 436KB 再被 webp 替换（实测发生过） -->
+      <img class="cat-photo cat-idle" id="catIdle" alt="猫" decoding="async">
+      <!-- 姿态层：八形态共用这一个 img，按状态换 src（按需加载，不预下载） -->
+      <img class="cat-photo cat-pose" id="catPose" alt="" decoding="async">
+      <!-- 完成态的小鱼干做成独立叠加层：照片模式下矢量图被隐藏，
+           若把鱼留在矢量里，换照片后「叼东西」这个动作就没了 -->
+      <svg class="fish-overlay" viewBox="0 0 44 24" aria-hidden="true">
+        <path d="M4 12 q14 -9 28 0 q-14 9 -28 0 z" fill="#7FA88B"/>
+        <path d="M32 12 l9 -6 v12 z" fill="#7FA88B"/>
+        <circle cx="11" cy="11" r="1.6" fill="#F6F1E7"/>
+      </svg>
+      <svg class="cat-vector" viewBox="0 0 300 340" role="img" aria-label="一只奶橘猫坐在窗边的软垫上，半眯着眼">
+      <defs>
+        <ellipse id="groundShadow" cx="162" cy="309" rx="94" ry="11" fill="#4A4238" opacity=".10"/>
+        <clipPath id="catClip">
+          <path d="M128 94 C122 104 116 116 115 127 C114 141 116 147 118 150
+                   C119 154 126 157 130 158 C132 162 133 164 134 168
+                   C124 188 118 212 117 238 C116 262 117 280 119 288
+                   C121 296 128 299 137 299 L163 299 C172 299 179 296 182 289
+                   C190 291 198 288 203 280 C210 270 213 258 212 244
+                   C210 220 203 196 194 182 C188 172 182 168 176 166
+                   C179 156 183 146 185 135 C183 124 181 113 181 110
+                   C179 96 175 86 171 82 C169 92 166 100 163 108
+                   C159 102 155 98 150 98 C144 98 140 101 137 106
+                   C134 100 131 92 128 94 z"/>
+        </clipPath>
+      </defs>
+
+      <use href="#groundShadow"/>
+      <ellipse cx="152" cy="296" rx="46" ry="7" fill="#4A4238" opacity=".09"/>
+
+      <g id="cushion">
+        <path d="M56 291 q0 -26 37 -26 h122 q37 0 37 26 q0 13 -37 13 h-122 q-37 0 -37 -13 z"
+              fill="#E7D6BE"/>
+        <path d="M56 291 q0 13 37 13 h122 q37 0 37 -13 q0 5 -37 5 h-122 q-37 0 -37 -5 z"
+              fill="#C67B5C" opacity=".16"/>
+        <path d="M104 296 q48 10 96 0 q-6 8 -48 8 q-42 0 -48 -8 z"
+              fill="#C08F55" opacity=".12"/>
+      </g>
+
+      <g id="tail">
+        <path d="M184 232 C212 242 232 264 236 284 C239 297 234 307 224 308
+                 C216 309 211 302 212 294 C213 278 202 260 174 250 z"
+              fill="#C08F55"/>
+      </g>
+
+      <g id="body">
+        <path d="M128 94 C122 104 116 116 115 127 C114 141 116 147 118 150
+                 C119 154 126 157 130 158 C132 162 133 164 134 168
+                 C124 188 118 212 117 238 C116 262 117 280 119 288
+                 C121 296 128 299 137 299 L163 299 C172 299 179 296 182 289
+                 C190 291 198 288 203 280 C210 270 213 258 212 244
+                 C210 220 203 196 194 182 C188 172 182 168 176 166
+                 C179 156 183 146 185 135 C183 124 181 113 181 110
+                 C179 96 175 86 171 82 C169 92 166 100 163 108
+                 C159 102 155 98 150 98 C144 98 140 101 137 106
+                 C134 100 131 92 128 94 z" fill="#E8B87A"/>
+
+        <g clip-path="url(#catClip)">
+          <path d="M130 101 C128 93 129 91 131 90 C135 95 137 100 138 105 z" fill="#C08F55" opacity=".42"/>
+          <path d="M179 101 C181 93 180 91 178 90 C174 95 171 100 170 105 z" fill="#C08F55" opacity=".42"/>
+          <path d="M150 98 C169 100 181 111 185 126 C189 142 181 152 171 156
+                   C179 133 171 112 150 98 z" fill="#C08F55" opacity=".20"/>
+          <path d="M188 174 C201 198 209 230 210 248 C211 264 207 276 199 283
+                   C206 268 206 246 202 226 C198 202 192 184 186 176 z"
+                fill="#C08F55" opacity=".28"/>
+          <path d="M132 172 C120 194 117 218 117 242 C117 264 118 280 119 288
+                   L132 288 C129 258 128 212 136 174 z" fill="#C08F55" opacity=".15"/>
+          <path d="M152 202 L152 293" stroke="#C08F55" stroke-width="1.5" opacity=".28"/>
+          <path d="M184 208 C197 234 201 262 193 284" stroke="#C08F55"
+                stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".26"/>
+          <path d="M131 292 q6 -3 11 0 M158 292 q6 -3 11 0" stroke="#C08F55"
+                stroke-width="1.2" fill="none" stroke-linecap="round" opacity=".35"/>
+          <path d="M176 288 q12 -2 18 4 q2 6 -6 7 q-11 1 -14 -5 q-1 -4 2 -6 z"
+                fill="#E8B87A"/>
+          <path d="M178 293 q6 -1 10 1" stroke="#C08F55" stroke-width="1.1"
+                fill="none" stroke-linecap="round" opacity=".4"/>
+        </g>
+
+        <g id="head">
+          <g id="eyes">
+            <ellipse class="eye" cx="139" cy="129" rx="5.6" ry="4.2" fill="#4A4238"/>
+            <ellipse class="eye" cx="166" cy="128" rx="5.2" ry="3.9" fill="#4A4238"/>
+            <path class="lid" d="M131 125 q9 -4 16 0 q-2 9 -8 9 q-6 0 -8 -9 z" fill="#E8B87A"/>
+            <path class="lid" d="M159 124 q9 -4 16 0 q-2 8 -8 8 q-6 0 -8 -8 z" fill="#E8B87A"/>
+            <path d="M132 126 q7 -2 13 1" stroke="#6B5F52" stroke-width="1.5"
+                  fill="none" stroke-linecap="round" opacity=".48"/>
+            <path d="M160 125 q7 -2 13 1" stroke="#6B5F52" stroke-width="1.5"
+                  fill="none" stroke-linecap="round" opacity=".48"/>
+          </g>
+          <path d="M152 142 q3.8 0 3.8 2.5 q0 2.5 -3.8 2.5 q-3.8 0 -3.8 -2.5 q0 -2.5 3.8 -2.5 z"
+                fill="#C67B5C"/>
+          <path d="M152 147 q-1 5 -6 6 M152 147 q1 5 6 6" stroke="#6B5F52"
+                stroke-width="1.4" fill="none" stroke-linecap="round" opacity=".58"/>
+          <path d="M124 139 q-13 -3 -19 -7 M125 144 q-13 1 -19 5" stroke="#6B5F52"
+                stroke-width="1.1" fill="none" stroke-linecap="round" opacity=".24"/>
+          <path d="M181 138 q13 -3 19 -7 M180 143 q13 1 19 5" stroke="#6B5F52"
+                stroke-width="1.1" fill="none" stroke-linecap="round" opacity=".24"/>
+          <!-- 嘴里叼的小鱼干（完成态才显示） -->
+          <g class="fish" data-vector-only>
+            <path d="M172 154 q12 -5 22 0 q-10 5 -22 0 z" fill="#7FA88B"/>
+            <path d="M194 154 l7 -4 v8 z" fill="#7FA88B"/>
+            <circle cx="178" cy="153.5" r="1.1" fill="#F6F1E7"/>
+          </g>
+        </g>
+      </g>
+
+      <g id="leaf">
+        <path d="M228 299 q13 -8 22 -5 q-3 10 -16 12 q-7 1 -6 -7 z" fill="#7FA88B" opacity=".8"/>
+        <path d="M230 301 q9 -4 16 -5" stroke="#F6F1E7" stroke-width="1.1"
+              fill="none" stroke-linecap="round" opacity=".6"/>
+      </g>
+    </svg>
+    </div>
+  </section>
+
+  <!-- ③ 按钮：全程只有一个 -->
+  <section class="action">
+    <button class="btn start" id="btnStart" type="button">开始专注</button>
+    <button class="btn" id="btnAgain" type="button" hidden>再来一次</button>
+  </section>
+
+  <div class="spacer" aria-hidden="true"></div>
+</main>
+
+<!-- 睡前 · 一起入睡（URL 带 #sleep 进入；25 分钟 → 释放 wake lock） -->
+<main class="sleepview" aria-label="猫陪你一起入睡">
+  <!-- 睡前猫位：优先 assets/cat-sleep.png（趴着/闭眼那张）；缺图则用下面的矢量姿势 -->
+  <!-- 注意：这里**不写 src**。写了 src 浏览器首屏就会下载 448KB 的睡姿图，
+       与代码里的懒加载冲突（实测首屏仍被下载）。由 ensureSleepCat() 进睡前态时才设置。 -->
+  <img class="cat-photo cat-sleep" id="catSleep" alt="猫睡着了" decoding="async">
+  <svg class="pose s1" viewBox="0 0 300 200" role="img" aria-label="猫在找地方趴下">
+    <ellipse cx="150" cy="168" rx="96" ry="10" fill="#000" opacity=".18"/>
+    <ellipse cx="150" cy="126" rx="76" ry="34" fill="#E8B87A"/>
+    <path d="M74 140 C74 112 108 100 150 100 C120 108 96 120 90 142 z" fill="#C08F55" opacity=".2"/>
+    <rect x="96" y="146" width="12" height="24" rx="6" fill="#E8B87A"/>
+    <rect x="120" y="150" width="12" height="22" rx="6" fill="#C08F55" opacity=".55"/>
+    <rect x="176" y="150" width="12" height="22" rx="6" fill="#E8B87A"/>
+    <rect x="198" y="146" width="12" height="24" rx="6" fill="#C08F55" opacity=".4"/>
+    <ellipse cx="88" cy="108" rx="30" ry="26" fill="#E8B87A"/>
+    <path d="M66 92 C62 80 64 76 68 75 C74 80 78 86 79 92 z" fill="#E8B87A"/>
+    <path d="M100 86 C102 74 100 70 96 70 C91 75 88 82 88 88 z" fill="#E8B87A"/>
+    <ellipse cx="78" cy="106" rx="4.6" ry="3.6" fill="#4A4238"/>
+    <ellipse cx="98" cy="105" rx="4.4" ry="3.4" fill="#4A4238"/>
+    <path d="M79 118 q3 0 3 2 q0 2 -3 2 q-3 0 -3 -2 q0 -2 3 -2 z" fill="#C67B5C" opacity=".85"/>
+    <path d="M226 122 C248 116 258 100 252 86" stroke="#C08F55" stroke-width="11"
+          fill="none" stroke-linecap="round"/>
+  </svg>
+
+  <svg class="pose s2" viewBox="0 0 300 200" role="img" aria-label="猫蜷着睡着了">
+    <ellipse cx="150" cy="170" rx="98" ry="10" fill="#000" opacity=".18"/>
+    <ellipse cx="150" cy="126" rx="84" ry="52" fill="#E8B87A"/>
+    <path d="M66 130 C72 90 116 66 158 68 C120 80 90 102 84 134 z" fill="#C08F55" opacity=".22"/>
+    <ellipse cx="96" cy="132" rx="34" ry="29" fill="#E8B87A"/>
+    <g class="ear">
+      <path d="M72 116 C68 104 70 100 74 99 C80 104 84 110 85 116 z" fill="#E8B87A"/>
+      <path d="M110 108 C112 96 110 92 106 92 C101 97 98 104 98 110 z" fill="#E8B87A"/>
+    </g>
+    <path d="M84 134 q7 5 14 0" stroke="#6B5F52" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".75"/>
+    <path d="M108 132 q7 5 14 0" stroke="#6B5F52" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".75"/>
+    <path d="M102 144 q3 0 3 2 q0 2 -3 2 q-3 0 -3 -2 q0 -2 3 -2 z" fill="#C67B5C" opacity=".85"/>
+    <path d="M208 148 C216 168 196 182 168 180 C140 178 120 172 104 166"
+          stroke="#C08F55" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <ellipse cx="110" cy="164" rx="13" ry="8" fill="#E8B87A"/>
+    <ellipse cx="86" cy="166" rx="13" ry="8" fill="#E8B87A"/>
+  </svg>
+
+  <div class="hint">可以放下来了</div>
+  <div class="dim"></div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- 参数 ---------- */
+  var qs = new URLSearchParams(location.search);
+  var FOCUS_MIN = parseFloat(qs.get('min') || '24');       // ?min=0.2 = 12 秒（测试用）
+  if (!isFinite(FOCUS_MIN) || FOCUS_MIN <= 0) FOCUS_MIN = 24;
+  var SLEEP_MIN = parseFloat(qs.get('sleepmin') || '25');  // 睡前默认 25 分钟
+  var TEST = FOCUS_MIN < 1;                                 // 加速演示
+  // 加速时把睡前 25 分钟一起压缩，保持"段与段的比例"不变
+  var SCALE = TEST ? (FOCUS_MIN / 24) : 1;
+
+  /* ---- 两个猫位（换照片只改这两行或直接替换文件）---- */
+  /* 素材：WebP 优先（q90 / 2× 显示尺寸，画质与原图在显示尺寸下无差），PNG 兜底。
+     体积：idle 436KB→64KB、sleep 448KB→45KB；睡前那张**懒加载**，首屏不再下。 */
+  var CAT_IDLE = { webp: './assets/cat-idle.webp', png: './assets/cat-idle.png' };
+  var CAT_SLEEP = { webp: './assets/cat-sleep.webp', png: './assets/cat-sleep.png' };
+
+  var body = document.body;
+
+  /* 照片探测：能加载 → 用照片（藏矢量图）；加载失败 → 退回矢量占位图。
+     注意：只探测白天那张，睡前那张缺就单独退回矢量姿势。 */
+  function loadWithFallback(img, pair, onOk, onFail) {
+    var tried = false;
+    img.addEventListener('load', function () { if (img.naturalWidth > 0) onOk(); });
+    img.addEventListener('error', function () {
+      if (!tried) { tried = true; img.src = pair.png; }   // webp 不支持/缺失 → 退回 png
+      else onFail();
+    });
+    img.src = pair.webp;
+  }
+
+  /* ══════════ 八形态 · 姿态层 ══════════
+     一个 #catPose 承载所有姿态，按状态换 src（按需加载：某姿态第一次出现才下载）。
+     素材规格统一 600×680，与 cat-idle 同尺寸，叠上去交叉淡入即可。 */
+  var POSE_FILE = {
+    watch: 'cat-pose-dinghuanshu',   // 盯进度环
+    lie: 'cat-pose-pai',             // 趴
+    stretch: 'cat-pose-shenlanyao',  // 伸懒腰
+    look: 'cat-pose-taitou',         // 抬头
+    lick: 'cat-pose-tianzhua',       // 舔爪
+    turn: 'cat-pose-zhuanshen'       // 转身
+  };
+  var poseEl = document.getElementById('catPose');
+  var poseLoaded = {};               // key → true（webp 或 png 任一成功）
+  var poseNow = null;                // 当前姿态 key；null = 坐姿(cat-idle)
+  var poseBackTimer = null;
+
+  function poseSrc(key, ext) { return './assets/poses/' + POSE_FILE[key] + '.' + ext; }
+
+  function setPose(key) {
+    if (!poseEl || !POSE_FILE[key] || poseNow === key) return;
+    poseNow = key;
+    var exts = ['webp', 'png'];        // 先 webp，失败再 png，都失败回坐姿
+    var i = 0;
+    function attempt() {
+      poseEl.onload = function () { body.classList.add('has-pose'); };
+      poseEl.onerror = function () {
+        i += 1;
+        if (i < exts.length) { poseEl.src = poseSrc(key, exts[i]); return; }
+        console.warn('[pose] ' + key + ' 素材不可用，退回坐姿');
+        poseEl.onerror = null;
+        clearPose();
+      };
+      poseEl.src = poseSrc(key, exts[i]);
+    }
+    attempt();
+  }
+
+  function clearPose() {
+    poseNow = null;
+    if (poseBackTimer) { clearTimeout(poseBackTimer); poseBackTimer = null; }
+    body.classList.remove('has-pose');
+  }
+
+  /** 临时姿态：持续 ms 后自动回坐姿 */
+  function setPoseFor(key, ms) {
+    if (poseBackTimer) { clearTimeout(poseBackTimer); poseBackTimer = null; }
+    setPose(key);
+    poseBackTimer = setTimeout(function () { poseBackTimer = null; clearPose(); }, ms);
+  }
+
+  (function pickCatImage() {
+    var img = document.getElementById('catIdle');
+    if (!img) return;
+    loadWithFallback(img, CAT_IDLE,
+      function () { body.classList.add('has-photo'); },
+      function () { body.classList.remove('has-photo'); console.info('[cat] 素材不可用，使用矢量占位图'); });
+  })();
+
+  /* 睡前素材懒加载：只有真正进睡前态才下载（首屏省 45KB） */
+  var sleepCatLoaded = false;
+  function ensureSleepCat() {
+    if (sleepCatLoaded) return;
+    sleepCatLoaded = true;
+    var img = document.getElementById('catSleep');
+    if (!img) return;
+    loadWithFallback(img, CAT_SLEEP,
+      function () { img.style.display = ''; },
+      function () { img.style.display = 'none'; console.info('[cat] 睡前素材不可用，用矢量姿势'); });
+  }
+  var numEl = document.getElementById('num');
+  var arcEl = document.getElementById('arc');
+  var btnStart = document.getElementById('btnStart');
+  var btnAgain = document.getElementById('btnAgain');
+  var eyes = document.getElementById('eyes');
+
+  /* ---------- 眨眼：6–10 秒一次、120ms ---------- */
+  (function blink() {
+    function once() { eyes.classList.add('blink'); setTimeout(function () { eyes.classList.remove('blink'); }, 120); }
+    function loop() { setTimeout(function () { once(); loop(); }, 6000 + Math.random() * 4000); }
+    loop();
+  })();
+
+  /* ---------- Wake Lock：专注/睡前时占住屏幕；睡前到点释放 → 借系统自动锁定熄屏 ---------- */
+  var wakeLock = null;
+  var wakeSupported = !!(navigator.wakeLock && navigator.wakeLock.request);
+  // 验收用日志：window.__wakeLog 里能看到 申请/获得/失败/释放 的时序
+  window.__wakeLog = [];
+  function wlog(m) { window.__wakeLog.push(new Date().toISOString().slice(11, 19) + ' ' + m); }
+  function acquireWake() {
+    if (!wakeSupported) { wlog('不支持 WakeLock（按系统自动锁定）'); console.warn('[wake] 此浏览器不支持 Screen Wake Lock，屏幕会按系统设置自动锁'); return; }
+    wlog('申请');
+    navigator.wakeLock.request('screen').then(function (lock) {
+      wakeLock = lock;
+      wlog('已获得'); console.info('[wake] 已占住屏幕');
+      lock.addEventListener('release', function () { wakeLock = null; });
+    }).catch(function (e) { wlog('失败 ' + e.name); console.warn('[wake] 申请失败：' + e.name + '（页面不在前台或系统策略限制）'); });
+  }
+  function releaseWake() {
+    if (wakeLock) { try { wakeLock.release(); wlog('已释放'); console.info('[wake] 已释放，系统将按自动锁定熄屏'); } catch (e) { wlog('释放异常 ' + e.message); } wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', function () {
+    var hidden = document.hidden || document.visibilityState === 'hidden';
+    // 分发：睡前 / 日间 各走自己那套，互不共用
+    if (body.classList.contains('sleep')) {
+      hidden ? sleepLeaveOnHidden() : sleepLeaveOnVisible();
+    } else {
+      hidden ? focusLeaveOnHidden() : focusLeaveOnVisible();
+      // 回到日间页面且还在专注 → 抬头看一眼（2 秒）
+      if (!hidden && state === 'focus' && !poseBackTimer) setPoseFor('look', 2000);
+    }
+    // 回到前台且任务仍在跑 → 重新占屏（wake lock 会在切后台时自动失效）
+    if (!hidden && running) acquireWake();
+  });
+
+  /* ---------- 状态机：idle → focus → done ---------- */
+  var state = 'idle';
+  var running = false;
+  var deadline = 0;
+  var totalMs = 0;
+  var timer = null;
+
+  /* ══════════════════════════════════════════════════════════════
+     离开判定 —— **两套，严格分开**（这个产品最容易埋的坑）
+       ① 日间专注：切走累计 >3 秒 → 本次作废（focusLeave*）
+       ② 睡前 25 分钟：规则相反（25 分钟内离开=失败、25 分钟后离开=成功），
+          当前版本睡前不做离开判定，只保留独立入口 sleepLeave*，与①零共享。
+     禁止合并成同一个函数/同一个变量。
+     ══════════════════════════════════════════════════════════════ */
+  var FOCUS_LEAVE_LIMIT_MS = 3000;      // 日间：>3 秒才算离开（瞄一眼微信不算）
+
+  // ① 日间专用
+  var focusLeaveSince = 0;              // 本次被隐藏的起点（0=当前可见）
+  var focusLeaveTotal = 0;              // 累计隐藏时长
+
+  function focusLeaveReset() { focusLeaveSince = 0; focusLeaveTotal = 0; }
+  function focusLeaveOnHidden() {
+    if (state !== 'focus') return;
+    if (focusLeaveSince === 0) focusLeaveSince = Date.now();
+  }
+  function focusLeaveOnVisible() {
+    if (state !== 'focus' || focusLeaveSince === 0) return;
+    focusLeaveTotal += Date.now() - focusLeaveSince;
+    focusLeaveSince = 0;
+    if (focusLeaveTotal > FOCUS_LEAVE_LIMIT_MS) focusLeaveFail();
+  }
+  /** 判定失败：本次作废 → 归零回待开始 → turn 姿态；零文字、零弹窗、不扣鱼干 */
+  function focusLeaveFail() {
+    clearInterval(timer); timer = null;
+    running = false; state = 'idle';
+    releaseWake();
+    focusLeaveReset();
+    body.classList.remove('done', 'gift', 'focus');
+    btnAgain.hidden = true; btnStart.hidden = false;
+    totalMs = Math.round(FOCUS_MIN * 60000);
+    paint(totalMs);                     // 倒计时归零（复位到满格）
+    setPose('turn');                    // 常驻 turn，直到用户按「开始专注」
+  }
+
+  // ② 睡前专用（与①零共享变量、零共享函数；睡前暂时不做离开判定）
+  var sleepLeaveSince = 0;
+  function sleepLeaveReset() { sleepLeaveSince = 0; }
+  function sleepLeaveOnHidden() { /* 睡前：25 分钟内离开属"失败"，但本版不改画面，留位 */ }
+  function sleepLeaveOnVisible() { /* 同上；规则与日间相反，不许复用日间的判据 */ }
+
+  function paint(remainMs) {
+    var ratio = totalMs > 0 ? Math.max(0, Math.min(1, 1 - remainMs / totalMs)) : 0;
+    arcEl.style.strokeDashoffset = String(132 * (1 - ratio));       // 弧线随进度走满
+    var mins = Math.max(1, Math.ceil(remainMs / 60000));            // 只显示分钟，不显示秒
+    if (numEl.textContent !== String(mins)) numEl.textContent = String(mins);
+  }
+
+  function startFocus() {
+    if (state === 'focus') return;
+    state = 'focus'; running = true;
+    clearPose();                    // 从任何残留姿态（含 turn）回到坐姿
+    focusLeaveReset();              // 每次开始，日间离开计时清零（睡前那套不碰）
+    body.classList.remove('done', 'gift');
+    body.classList.add('focus');
+    btnStart.hidden = true; btnAgain.hidden = true;
+    document.querySelector('.clock').setAttribute('aria-label', '专注中，剩余分钟');
+    totalMs = Math.round(FOCUS_MIN * 60000);
+    deadline = Date.now() + totalMs;
+    paint(totalMs);
+    setPoseFor('watch', Math.min(30000, totalMs * 0.25));   // 盯着弧线开始走
+    acquireWake();
+    clearInterval(timer);
+    timer = setInterval(function () {
+      var rem = deadline - Date.now();
+      if (rem <= 0) { finishFocus(); return; }
+      paint(rem);
+      // 过半 → 趴下（只在没有临时姿态时切，别打断 watch/look）
+      if (rem < totalMs * 0.5 && poseNow === null) setPose('lie');
+    }, 250);
+  }
+
+  function finishFocus() {
+    clearInterval(timer); timer = null;
+    running = false; state = 'done';
+    releaseWake();                       // 专注结束就不再占屏
+    paint(0);
+    setPoseFor('stretch', 3000);          // 伸个懒腰
+    body.classList.remove('focus');
+    body.classList.add('done');
+    // 猫叼东西回来：3 秒后礼物卡浮现（用角色说事，不写"专注完成/时长"）
+    setTimeout(function () {
+      body.classList.add('gift');
+      var gift = document.getElementById('gift');
+      if (gift) gift.textContent = '小鱼干 +1';
+      btnAgain.hidden = false;
+    }, TEST ? 800 : 3000);
+  }
+
+  function reset() {
+    state = 'idle'; running = false;
+    clearPose();
+    clearInterval(timer); timer = null;
+    body.classList.remove('done', 'gift', 'focus');
+    btnAgain.hidden = true; btnStart.hidden = false;
+    totalMs = Math.round(FOCUS_MIN * 60000);
+    paint(totalMs);
+  }
+
+  /* 待开始态：随机舔爪（20–40 秒一次）。只在 idle 且非睡前时触发，不与其他动效叠加 */
+  (function lickLoop() {
+    function next() {
+      setTimeout(function () {
+        if (state === 'idle' && !body.classList.contains('sleep') && !poseBackTimer && poseNow === null) {
+          setPoseFor('lick', 2500);
+        }
+        next();
+      }, 20000 + Math.random() * 20000);
+    }
+    next();
+  })();
+
+  btnStart.addEventListener('click', startFocus);
+  btnAgain.addEventListener('click', function () { reset(); startFocus(); });
+
+  /* ---------- 睡前态：/index.html?min=..#sleep ---------- */
+  var sleepTimer = null;
+  var sleepStart = 0;
+  function setStage(cls) {
+    ['s1', 's2', 's3', 's4'].forEach(function (c) { body.classList.toggle(c, c === cls); });
+  }
+  function startSleep() {
+    // 进睡前态前先清掉白天态的残留状态（done/gift/focus），否则 body 同时挂着
+    // .gift 会命中礼物卡的 .giftcard? 不——会命中历史遗留的 .gift 规则，整页被 transform 偏移。
+    clearInterval(timer); timer = null;
+    state = 'idle'; running = false;
+    body.classList.remove('done', 'gift', 'focus', 'f2');
+    btnStart.hidden = false; btnAgain.hidden = true;
+    body.classList.add('sleep');
+    clearPose();                         // 睡前不用日间那六个姿态
+    sleepLeaveReset();                   // 睡前自己那套计时（不碰 focusLeave*）
+    ensureSleepCat();                    // 懒加载睡前素材（首屏不下这 45KB）
+    running = true;
+    acquireWake();                       // 先占住屏幕，猫才能陪你 25 分钟
+    sleepStart = Date.now();
+    // 阶段边界（分钟）：0–5 找位置 / 5–15 闭眼 / 15–25 深睡 / 到点渐暗
+    var b1 = 5 * 60000 * SCALE, b2 = 15 * 60000 * SCALE, b3 = SLEEP_MIN * 60000 * SCALE;
+    clearInterval(sleepTimer);
+    sleepTimer = setInterval(function () {
+      var t = Date.now() - sleepStart;
+      if (t >= b3) {
+        setStage('s4');
+        clearInterval(sleepTimer); sleepTimer = null;
+        // 到点：画面开始 10 秒沉黑，同时放手让系统熄屏
+        releaseWake();
+        running = false;
+        return;
+      }
+      setStage(t < b1 ? 's1' : (t < b2 ? 's2' : 's3'));
+    }, 500);
+    setStage('s1');
+  }
+
+  function applyHash() {
+    // 评审用：?min=..#sleep-s1 / -s2 / -s3 / -s4 可钉死某一阶段
+    var pinned = /^#sleep-(s[1-4])$/.exec(location.hash);
+    if (pinned) {
+      clearInterval(sleepTimer); sleepTimer = null; running = false;
+      body.classList.add('sleep'); ensureSleepCat(); setStage(pinned[1]);
+      document.querySelector('.sleepview .dim').style.transition = 'none';
+      return;
+    }
+    if (location.hash === '#sleep') { startSleep(); return; }
+    // 离开睡前态 → 回到白天的专注态
+    clearInterval(sleepTimer); sleepTimer = null;
+    if (body.classList.contains('sleep')) {
+      body.classList.remove('sleep', 's1', 's2', 's3', 's4');
+      releaseWake();
+      state = 'idle'; running = false;
+      reset();
+    }
+  }
+
+  // 初始化
+  totalMs = Math.round(FOCUS_MIN * 60000);
+  // ?auto=1 → 打开就自动开始专注（截图/验收用，省一次点击；默认不自动）
+  var AUTO = qs.get('auto') === '1';
+  paint(totalMs);
+  btnStart.textContent = '开始专注';
+  document.title = '猫陪我 · 专注';
+  applyHash();
+  window.addEventListener('hashchange', applyHash);
+  // 评审钩子：?pose=watch|lie|stretch|look|lick|turn 直接显示该姿态（截图验收用）
+  var PIN_POSE = qs.get('pose');
+  if (PIN_POSE && POSE_FILE[PIN_POSE]) setPose(PIN_POSE);
+
+  if (AUTO && !body.classList.contains('sleep')) startFocus();
+
+  // Service Worker（离线用；file:// 或非 https/localhost 时自动跳过）
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').catch(function (e) { console.warn('[sw] 注册失败：' + e.message); });
+    });
+  }
+})();
+</script>
+</body>
+</html>

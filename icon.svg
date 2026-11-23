@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#F6F1E7"/>
+  <!-- 猫头（应用图标只放头，小尺寸下才认得出） -->
+  <path d="M150 214 C142 168 150 142 168 138 C186 152 198 176 202 200 z" fill="#E8B87A"/>
+  <path d="M362 214 C370 168 362 142 344 138 C326 152 314 176 310 200 z" fill="#E8B87A"/>
+  <path d="M160 198 C156 172 160 158 168 156 C180 166 188 182 190 198 z" fill="#C08F55" opacity=".42"/>
+  <path d="M352 198 C356 172 352 158 344 156 C332 166 324 182 322 198 z" fill="#C08F55" opacity=".42"/>
+  <ellipse cx="256" cy="266" rx="132" ry="118" fill="#E8B87A"/>
+  <path d="M256 384 C318 384 372 344 388 288 C388 348 336 400 256 400 C176 400 124 348 124 288 C140 344 194 384 256 384 z" fill="#C08F55" opacity=".18"/>
+  <!-- 半眯的眼 + 鼻子 -->
+  <path d="M188 258 q28 -10 54 2" stroke="#4A4238" stroke-width="11" fill="none" stroke-linecap="round"/>
+  <path d="M270 260 q28 -12 54 -2" stroke="#4A4238" stroke-width="11" fill="none" stroke-linecap="round"/>
+  <path d="M256 292 q11 0 11 7 q0 7 -11 7 q-11 0 -11 -7 q0 -7 11 -7 z" fill="#C67B5C"/>
+  <path d="M256 306 q-4 14 -18 17 M256 306 q4 14 18 17" stroke="#6B5F52" stroke-width="7"
+        fill="none" stroke-linecap="round" opacity=".55"/>
+</svg>
